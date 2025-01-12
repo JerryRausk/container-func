@@ -1,0 +1,166 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.App/managedEnvironments",
+            "apiVersion": "2024-03-01",
+            "name": "managedEnvironment-containerfunc",
+            "location": "West Europe",
+            "properties": {
+                "appLogsConfiguration": {
+                    "destination": "log-analytics",
+                    "logAnalyticsConfiguration": {
+                        "customerId": "some-guid-here"
+                    }
+                },
+                "zoneRedundant": false,
+                "kedaConfiguration": {},
+                "daprConfiguration": {},
+                "customDomainConfiguration": {},
+                "workloadProfiles": [
+                    {
+                        "workloadProfileType": "Consumption",
+                        "name": "Consumption"
+                    }
+                ],
+                "peerAuthentication": {
+                    "mtls": {
+                        "enabled": false
+                    }
+                },
+                "peerTrafficConfiguration": {
+                    "encryption": {
+                        "enabled": false
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2023-09-01",
+            "name": "workspacecontainerfunc95b3",
+            "location": "westeurope",
+            "properties": {
+                "sku": {
+                    "name": "PerGB2018"
+                },
+                "retentionInDays": 30,
+                "features": {
+                    "legacy": 0,
+                    "searchVersion": 1,
+                    "enableLogAccessUsingOnlyResourcePermissions": true
+                },
+                "workspaceCapping": {
+                    "dailyQuotaGb": -1
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.App/containerapps",
+            "apiVersion": "2024-03-01",
+            "name": "container-func",
+            "location": "West Europe",
+            "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', 'managedEnvironment-containerfunc')]"
+            ],
+            "identity": {
+                "type": "None"
+            },
+            "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'managedEnvironment-containerfunc')]",
+                "environmentId": "[resourceId('Microsoft.App/managedEnvironments', 'managedEnvironment-containerfunc')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                    "secrets": [
+                        {
+                            "name": "microsoft-provider-authentication-secret"
+                        }
+                    ],
+                    "activeRevisionsMode": "Single",
+                    "ingress": {
+                        "external": true,
+                        "targetPort": 80,
+                        "exposedPort": 0,
+                        "transport": "Auto",
+                        "traffic": [
+                            {
+                                "weight": 100,
+                                "latestRevision": true
+                            }
+                        ],
+                        "allowInsecure": false,
+                        "clientCertificateMode": "Ignore",
+                        "stickySessions": {
+                            "affinity": "none"
+                        }
+                    },
+                    "maxInactiveRevisions": 100
+                },
+                "template": {
+                    "containers": [
+                        {
+                            "image": "docker.io/jerpa/container-func-image:v0.0.6",
+                            "name": "container-func",
+                            "resources": {
+                                "cpu": 0.5,
+                                "memory": "1Gi"
+                            },
+                            "probes": []
+                        }
+                    ],
+                    "scale": {
+                        "minReplicas": 0,
+                        "maxReplicas": 1
+                    },
+                    "volumes": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.App/containerApps/authConfigs",
+            "apiVersion": "2024-03-01",
+            "name": "container-func/current",
+            "dependsOn": [
+                "[resourceId('Microsoft.App/containerApps', 'container-func')]"
+            ],
+            "properties": {
+                "platform": {
+                    "enabled": true
+                },
+                "globalValidation": {
+                    "unauthenticatedClientAction": "RedirectToLoginPage",
+                    "redirectToProvider": "azureactivedirectory"
+                },
+                "identityProviders": {
+                    "azureActiveDirectory": {
+                        "registration": {
+                            "openIdIssuer": "https://login.microsoftonline.com/common/v2.0",
+                            "clientId": "8b6e68f4-7e2d-4d05-8ea5-f75eeed70f95",
+                            "clientSecretSettingName": "microsoft-provider-authentication-secret"
+                        },
+                        "validation": {
+                            "allowedAudiences": [],
+                            "defaultAuthorizationPolicy": {
+                                "allowedPrincipals": {}
+                            }
+                        },
+                        "isAutoProvisioned": false
+                    }
+                },
+                "login": {
+                    "routes": {},
+                    "preserveUrlFragmentsForLogins": false,
+                    "allowedExternalRedirectUrls": [],
+                    "cookieExpiration": {},
+                    "nonce": {}
+                },
+                "encryptionSettings": {}
+            }
+        }
+    ]
+}
