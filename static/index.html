@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Entity Selector</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+        }
+        select, input {
+            margin: 10px;
+        }
+        #parameterContainer div {
+            display: flex;
+            flex-direction: row;
+            gap: 12px;
+            
+        }
+        #parameterContainer div label {
+            align-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Select an Entity</h1>
+        <select id="entitySelect">
+            <option value="" disabled selected>Loading entities...</option>
+        </select>
+        <div id="parameterContainer">
+
+        </div>
+        <button id="send-params">Skicka</button>
+        <p id="result"></p>
+        <button id="get-headers">Hämta headers till console log</button>
+        <button id="get-roles">Hämta roller till console log</button>
+    </div>
+
+    <script>
+        function createOption(val, label) {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.label = label;
+            return opt;
+        }
+        document.getElementById("get-headers").addEventListener("click", async () => {
+            const res = await fetch("/api/my-headers");
+            const resData = await res.json();
+            console.log(JSON.stringify(resData));
+        })
+        document.getElementById("get-roles").addEventListener("click", async () => {
+            const res = await fetch("/api/my-roles");
+            console.log(await res.text());
+        })
+        const entitySelect = document.getElementById("entitySelect");
+        const parameterContainer = document.getElementById("parameterContainer");
+        const resultDisplay = document.getElementById("result");
+        document.getElementById("send-params").addEventListener("click", async () => {
+            resultDisplay.textContent = "";
+            if(!entitySelect.value) return;
+            const allParams = [...Array.from(parameterContainer.getElementsByTagName("select")), ...Array.from(parameterContainer.getElementsByTagName("input"))].map(ele => {
+                return {
+                    id: ele.id,
+                    value: ele.value
+                }
+            })
+            const response = await fetch(`/api/send-parameters`, {
+                    method: "POST",
+                    body: JSON.stringify(allParams),
+                    headers: {"Content-Type": "application/json"}
+                });
+            if (!response.ok) throw new Error("Failed to fetch parameters");
+            resultDisplay.textContent = await response.text();
+        })
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Fetch available entities
+            const response = await fetch("/api/available-entities");
+            if (!response.ok) throw new Error("Failed to fetch entities");
+
+            const entities = await response.json();
+            entitySelect.innerHTML = "<option value=''>Välj...</option>";
+            entities.forEach(entity => {
+                entitySelect.appendChild(createOption(entity.id, entity.label));
+            });
+
+            // Handle entity selection
+            entitySelect.addEventListener("change", async () => {
+                const selectedEntityId = entitySelect.value;
+                parameterContainer.innerHTML = ""; // Clear previous parameter selects
+                if(!selectedEntityId) return;
+                
+                const response = await fetch(`/api/get-parameters`, {
+                    method: "POST",
+                    body: JSON.stringify({entityId: selectedEntityId}),
+                    headers: {"Content-Type": "application/json"}
+                });
+                if (!response.ok) throw new Error("Failed to fetch parameters");
+
+                const parameters = await response.json();
+
+                // Per parameter create a label and an "interaction element"
+                parameters.forEach(param => {
+                    let interactionElement = null;
+                    const wrapper = document.createElement("div");
+                    const label = document.createElement("label");
+                    label.textContent = param.label;
+
+                    if(param.type === "select") {
+                        interactionElement = document.createElement("select");
+                        
+                        // Per option in that parameter add an option
+                        param.options.forEach(option => {
+                            interactionElement.appendChild(createOption(option.value, option.label));
+                        });
+                    } else {
+                        interactionElement = document.createElement("input")
+                    }
+                    interactionElement.id = param.id;
+                    wrapper.appendChild(label);
+                        wrapper.appendChild(interactionElement);
+                        parameterContainer.appendChild(wrapper);
+                    
+                });
+            });
+        });
+    </script>
+</body>
+</html>
